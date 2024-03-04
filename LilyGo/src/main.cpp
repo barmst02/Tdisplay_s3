@@ -5,10 +5,11 @@
    It requires the use of SoftwareSerial, and assumes that you have a
    4800-baud serial GPS device hooked up on pins 4(rx) and 3(tx).
 */
-static const uint32_t GPSBaud = 4800;
+static const uint32_t GPSBaud = 9600;
 
 // The TinyGPSPlus object
 TinyGPSPlus gps;
+void displayInfo(void);
 
 void setup()
 {
@@ -20,6 +21,20 @@ void setup()
   Serial.print(F("Testing TinyGPSPlus library v. ")); Serial.println(TinyGPSPlus::libraryVersion());
   Serial.println(F("by Mikal Hart"));
   Serial.println();
+}
+
+void loop()
+{
+  // This sketch displays information every time a new sentence is correctly encoded.
+  while (Serial0.available() > 0)
+    if (gps.encode(Serial0.read()))
+      displayInfo();
+
+  if (millis() > 5000 && gps.charsProcessed() < 10)
+  {
+    Serial.println(F("No GPS detected: check wiring."));
+    while(true);
+  }
 }
 
 void displayInfo()
@@ -73,16 +88,3 @@ void displayInfo()
   Serial.println();
 }
 
-void loop()
-{
-  // This sketch displays information every time a new sentence is correctly encoded.
-  while (Serial0.available() > 0)
-    if (gps.encode(Serial0.read()))
-      displayInfo();
-
-  if (millis() > 5000 && gps.charsProcessed() < 10)
-  {
-    Serial.println(F("No GPS detected: check wiring."));
-    while(true);
-  }
-}
