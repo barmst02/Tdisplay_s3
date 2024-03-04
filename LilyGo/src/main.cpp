@@ -1,27 +1,88 @@
-#include <Arduino.h>
-#include "pin_config.h"
+#include <TinyGPSPlus.h>
 
+/*
+   This sample sketch demonstrates the normal use of a TinyGPSPlus (TinyGPSPlus) object.
+   It requires the use of SoftwareSerial, and assumes that you have a
+   4800-baud serial GPS device hooked up on pins 4(rx) and 3(tx).
+*/
+static const uint32_t GPSBaud = 4800;
 
-//GPS Baud rate
-#define GPSBaud 9600 
- 
-//Serial Monitor Baud Rate
-#define Serial_Monitor_Baud 115200 
+// The TinyGPSPlus object
+TinyGPSPlus gps;
 
+void setup()
+{
+  Serial.begin(115200);
+  Serial0.begin(GPSBaud);
 
-void setup() {
-  Serial0.begin(GPSBaud ); // Initialize serial communication
-  
-  Serial.begin(Serial_Monitor_Baud); // Initialize serial communication
-  Serial.println("Hello T-Display-S3");
-  
+  Serial.println(F("DeviceExample.ino"));
+  Serial.println(F("A simple demonstration of TinyGPSPlus with an attached GPS module"));
+  Serial.print(F("Testing TinyGPSPlus library v. ")); Serial.println(TinyGPSPlus::libraryVersion());
+  Serial.println(F("by Mikal Hart"));
+  Serial.println();
 }
 
+void displayInfo()
+{
+  Serial.print(F("Location: ")); 
+  if (gps.location.isValid())
+  {
+    Serial.print(gps.location.lat(), 6);
+    Serial.print(F(","));
+    Serial.print(gps.location.lng(), 6);
+  }
+  else
+  {
+    Serial.print(F("INVALID"));
+  }
 
-void loop() {
+  Serial.print(F("  Date/Time: "));
+  if (gps.date.isValid())
+  {
+    Serial.print(gps.date.month());
+    Serial.print(F("/"));
+    Serial.print(gps.date.day());
+    Serial.print(F("/"));
+    Serial.print(gps.date.year());
+  }
+  else
+  {
+    Serial.print(F("INVALID"));
+  }
+
+  Serial.print(F(" "));
+  if (gps.time.isValid())
+  {
+    if (gps.time.hour() < 10) Serial.print(F("0"));
+    Serial.print(gps.time.hour());
+    Serial.print(F(":"));
+    if (gps.time.minute() < 10) Serial.print(F("0"));
+    Serial.print(gps.time.minute());
+    Serial.print(F(":"));
+    if (gps.time.second() < 10) Serial.print(F("0"));
+    Serial.print(gps.time.second());
+    Serial.print(F("."));
+    if (gps.time.centisecond() < 10) Serial.print(F("0"));
+    Serial.print(gps.time.centisecond());
+  }
+  else
+  {
+    Serial.print(F("INVALID"));
+  }
+
+  Serial.println();
+}
+
+void loop()
+{
+  // This sketch displays information every time a new sentence is correctly encoded.
   while (Serial0.available() > 0)
-    Serial.write(Serial0.read());
-  
+    if (gps.encode(Serial0.read()))
+      displayInfo();
+
+  if (millis() > 5000 && gps.charsProcessed() < 10)
+  {
+    Serial.println(F("No GPS detected: check wiring."));
+    while(true);
+  }
 }
-
-
