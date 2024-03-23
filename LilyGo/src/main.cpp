@@ -3,9 +3,6 @@
 #include "TFT_eSPI.h" /* Please use the TFT library provided in the library. */
 #include "pin_config.h"
 
-/*
-   This sample code demonstrates the normal use of a TinyGPSPlus (TinyGPSPlus) object.
-*/
 static const uint32_t GPSBaud = 9600;
 
 // The TinyGPSPlus object
@@ -13,31 +10,23 @@ TinyGPSPlus gps;
 
 TFT_eSPI tft = TFT_eSPI();
 
-void setup()
-{
-  Serial.begin(115200);
-  Serial0.begin(GPSBaud);
+static int dHeight = 170;
+static int dWidth = 320;
 
-  tft.begin();
-  tft.setRotation(3);
-  tft.setTextSize(2);
-  tft.fillScreen(TFT_BLACK);
-  tft.setTextColor(TFT_RED, TFT_BLACK);
-  //find the width of one character
-  int charWidth = tft.drawString("0", 0, 150, 8);
+static int maxSat = 12;
+char mphOld[4];
+int brightness;
+int speed;
 
-  Serial.print("Height: ");
-  Serial.print(tft.getViewportHeight());
-  Serial.println();
-  Serial.print("Width: ");
-  Serial.print(tft.getViewportWidth());
-  Serial.println();
+static int battCHG = 80;
 
-  Serial.println();
-  Serial.println(F("Sats HDOP  Latitude   Longitude   Fix  Date       Time     Date Alt    Course Speed Card  Distance Course Card  Chars Sentences Checksum"));
-  Serial.println(F("           (deg)      (deg)       Age                      Age  (m)    --- from GPS ----  ---- to London  ----  RX    RX        Fail"));
-  Serial.println(F("----------------------------------------------------------------------------------------------------------------------------------------"));
-}
+#include "OneButton.h"
+
+// Setup a new OneButton on pin A1.  
+OneButton button1(PIN_BUTTON_2, true);
+// Setup a new OneButton on pin A2.  
+OneButton button2(PIN_BUTTON_1, true);
+
 
 // This custom version of delay() ensures that the gps object
 // is being "fed".
@@ -46,134 +35,185 @@ static void smartDelay(unsigned long ms)
   unsigned long start = millis();
   do 
   {
+    button1.tick();
+    button2.tick();
     while (Serial0.available())
       gps.encode(Serial0.read());
   } while (millis() - start < ms);
 }
 
-static void printFloat(float val, bool valid, int len, int prec)
-{
-  if (!valid)
-  {
-    while (len-- > 1)
-      Serial.print('*');
-    Serial.print(' ');
-  }
-  else
-  {
-    Serial.print(val, prec);
-    int vi = abs((int)val);
-    int flen = prec + (val < 0.0 ? 2 : 1); // . and -
-    flen += vi >= 1000 ? 4 : vi >= 100 ? 3 : vi >= 10 ? 2 : 1;
-    for (int i=flen; i<len; ++i)
-      Serial.print(' ');
-  }
-  smartDelay(0);
+// This function will be called when the button1 was pressed 1 time (and no 2. button press followed).
+void click1() {
+  brightness = ledcRead(0);
+  brightness += battCHG;
+  if (brightness >250) brightness = 250;
+  ledcWrite(0, brightness);
+  Serial.println("Button 1 click.");
+  Serial.printf("Brightness: %i", brightness);
+} // click1
+
+// This function will be called when the button1 was pressed 1 time (and no 2. button press followed).
+void click2() {
+  brightness = ledcRead(0);
+  brightness -= battCHG;
+  if (brightness <10) brightness = 10;
+  ledcWrite(0, brightness);
+  Serial.println("Button 2 click.");
+  Serial.printf("Brightness: %i", brightness);
+} // click2
+
+void longPressStart1() {
+  ledcWrite(0, 250);
 }
 
-static void printInt(unsigned long val, bool valid, int len)
-{
-  char sz[32] = "*****************";
-  if (valid)
-    sprintf(sz, "%ld", val);
-  sz[len] = 0;
-  for (int i=strlen(sz); i<len; ++i)
-    sz[i] = ' ';
-  if (len > 0) 
-    sz[len-1] = ' ';
-  Serial.print(sz);
-  smartDelay(0);
+void longPressStart2(){
+  ledcWrite(0, 10);
 }
 
-static void printDateTime(TinyGPSDate &d, TinyGPSTime &t)
+void setup()
 {
-  if (!d.isValid())
-  {
-    Serial.print(F("********** "));
-  }
-  else
-  {
-    char sz[32];
-    sprintf(sz, "%02d/%02d/%02d ", d.month(), d.day(), d.year());
-    Serial.print(sz);
-  }
+  Serial.begin(115200);
+  Serial0.begin(GPSBaud);
+
+  tft.begin();
+  tft.setRotation(1);
+  tft.setTextSize(2);
+  tft.fillScreen(TFT_BLACK);
+  //tft.setTextColor(TFT_RED, TFT_BLACK);
+  //find the width of one character
+  //Serial.print(tft.getViewportHeight());
+  //Serial.print(tft.getViewportWidth());
   
-  if (!t.isValid())
-  {
-    Serial.print(F("******** "));
-  }
-  else
-  {
-    char sz[32];
-    sprintf(sz, "%02d:%02d:%02d ", t.hour(), t.minute(), t.second());
-    Serial.print(sz);
-  }
+  // Turn on backlight
+  ledcSetup(0, 2000, 8);
+  ledcAttachPin(PIN_LCD_BL, 0);
+  ledcWrite(0, 170);
+  
+  // link the button 1 functions.
+  button1.attachClick(click1);
+  //button1.attachDoubleClick(doubleclick1);
+  button1.attachLongPressStart(longPressStart1);
+  //button1.attachLongPressStop(longPressStop1);
+  //button1.attachDuringLongPress(longclick1);
 
-  printInt(d.age(), d.isValid(), 5);
-  smartDelay(0);
-}
+  // link the button 2 functions.
+  button2.attachClick(click2);
+  //button2.attachDoubleClick(doubleclick2);
+  button2.attachLongPressStart(longPressStart2);
+  //button2.attachLongPressStop(longPressStop2);
+  //button2.attachDuringLongPress(longclick2);
 
-static void printStr(const char *str, int len)
-{
-  int slen = strlen(str);
-  for (int i=0; i<len; ++i)
-    Serial.print(i<slen ? str[i] : ' ');
-  smartDelay(0);
+  Serial.println("Initial delay...");
+  smartDelay(1000);
 }
 
 void loop()
 {
-  //Time
-  tft.setTextColor(TFT_YELLOW, TFT_BLACK);
-  char tm[32];
-  TinyGPSTime t = gps.time;
-    if (!t.isValid())
-  {
-    sprintf(tm, "******** ");
-  }
-  else
-  {
-    sprintf(tm, "%02d:%02d:%02d ", gps.time.hour(), gps.time.minute(), gps.time.second());  
-  }
-  tft.drawString(tm, 0, 140, 2);
-  
-  //Speed
-  tft.setTextColor(TFT_RED, TFT_BLACK);
-  char mph[3];
-  if (gps.speed.isValid()) {
-    int speed = floor(gps.speed.mph());
-    sprintf(mph, "%d", speed);
-  }
-  else {
-    sprintf(mph, "%d", gps.satellites.value());
-  }
-  int x=(3-strlen(mph)) * 75 + 10;
-  tft.drawString(mph,x,0,8);
-  
-  //Course
-  tft.setTextColor(TFT_GREEN, TFT_BLACK);
-  //tft.drawString(TinyGPSPlus::cardinal(gps.course.deg()),0,0,6);
-  tft.drawString((gps.course.isValid() ? TinyGPSPlus::cardinal(gps.course.deg()) : "*** "), 0, 0, 2);
-  //tft.drawFloat(gps.course.deg(),0,0,0,2);
-  
-  printInt(gps.satellites.value(), gps.satellites.isValid(), 5);
-  printFloat(gps.hdop.hdop(), gps.hdop.isValid(), 6, 1);
-  printFloat(gps.location.lat(), gps.location.isValid(), 11, 6);
-  printFloat(gps.location.lng(), gps.location.isValid(), 12, 6);
-  printInt(gps.location.age(), gps.location.isValid(), 5);
-  printDateTime(gps.date, gps.time);
-  printFloat(gps.altitude.meters(), gps.altitude.isValid(), 7, 2);
-  printFloat(gps.course.deg(), gps.course.isValid(), 7, 2);
-  printFloat(gps.speed.kmph(), gps.speed.isValid(), 6, 2);
-  printStr(gps.course.isValid() ? TinyGPSPlus::cardinal(gps.course.deg()) : "*** ", 6);
+  Serial.println("Starting loop...");
+  int size;
+  int x;
+  char mph[4];
 
-  printInt(gps.charsProcessed(), true, 6);
-  printInt(gps.sentencesWithFix(), true, 10);
-  printInt(gps.failedChecksum(), true, 9);
+  //Serial.printf("isValid: %s", gps.satellites.isValid() ? "true" : "false"); Serial.println();
+  //Serial.printf("isUpdated: %s", gps.satellites.isUpdated() ? "true" : "false"); Serial.println();
+  Serial.printf("Satellites: %d", gps.satellites.value()); Serial.println();
+  //tft.printf("Satellites: %d", gps.satellites.value()); 
+  Serial.printf("HDOP: %d", gps.hdop.value()); Serial.println();
   Serial.println();
   
-  smartDelay(1000);
+  Serial.println("SATELLITES--------------------------");
+  int numSat = 0; 
+
+  if (gps.satellites.isValid())
+  {
+    numSat = gps.satellites.value();
+    if (numSat>maxSat) 
+      numSat=maxSat;
+  }
+  char strSat[maxSat+1];
+  sprintf(strSat, "%.*s", maxSat, "                                             ");  //string of maxSat spaces
+  for (int i=1; i<=maxSat-numSat; ++i)
+    {
+      strSat[i-1] = '=';
+    }
+  
+  tft.setTextColor(TFT_RED, TFT_BLACK);
+  tft.drawString(strSat, 0, 140, 2);
+  Serial.println("END SATELLITES--------------------------");
+  
+
+  Serial.println("SPEED--------------------------");
+   
+  Serial.printf("Speed Valid: %d", gps.speed.isValid() ? floor(gps.speed.mph()): -1); Serial.println();
+  
+  if (gps.speed.isValid()) {
+    speed = floor(gps.speed.mph());
+    //---------------------------------
+    //speed = random(20); 
+    //Serial.printf("Speed Random: %d", speed); Serial.println();
+  }
+  else {
+    speed = floor(gps.speed.mph());
+  }
+  sprintf(mph, "--");  
+  
+  if (mph != mphOld) {
+    //display the prior value in black to "erase" it
+    Serial.println(mphOld);
+    tft.setTextColor(TFT_BLACK, TFT_BLACK);
+    x=(3-strlen(mphOld)) * 110;   // each character is 110 pixels
+    size = tft.drawString(mphOld,x,0,8);
+  
+    //display the new value
+    Serial.println(mph);
+    tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
+    x=(3-strlen(mph)) * 110;   // each character is 110 pixels
+    size = tft.drawString(mph,x,0,8);
+  
+    sprintf(mphOld, "%d", speed); 
+  }
+  Serial.println("END SPEED--------------------------");
+
+  Serial.println("COURSE --------------------------");
+  
+  char strCard[4] = "???";
+
+  Serial.printf("Cardinal Dir: %s", gps.course.isValid() ? TinyGPSPlus::cardinal(gps.course.deg()) : "???"); Serial.println();
+
+  if (gps.course.isValid())
+    sprintf(strCard, "%s     ", TinyGPSPlus::cardinal(gps.course.deg()));
+
+  tft.setTextColor(TFT_WHITE, TFT_BLACK);
+  size = tft.drawString(strCard, 0, 0, 2);  // each character is 28 pixels
+  //Serial.println(size);
+ Serial.println("END COURSE --------------------------");
+  
+
+  smartDelay(2000);
+  Serial.println("Looping...");
 
   if (millis() > 5000 && gps.charsProcessed() < 10)
     Serial.println(F("No GPS data received: check wiring"));
 }
+
+
+/*TFT_BLACK       0x0000
+TFT_NAVY        0x000F
+TFT_DARKGREEN   0x03E0
+TFT_DARKCYAN    0x03EF
+TFT_MAROON      0x7800
+TFT_PURPLE      0x780F
+TFT_OLIVE       0x7BE0
+TFT_LIGHTGREY   0xC618
+TFT_DARKGREY    0x7BEF
+TFT_BLUE        0x001F
+TFT_GREEN       0x07E0
+TFT_CYAN        0x07FF
+TFT_RED         0xF800
+TFT_MAGENTA     0xF81F
+TFT_YELLOW      0xFFE0
+TFT_WHITE       0xFFFF
+TFT_ORANGE      0xFDA0
+TFT_GREENYELLOW 0xB7E0
+TFT_PINK        0xFC9F
+*/
